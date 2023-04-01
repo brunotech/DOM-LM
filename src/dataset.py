@@ -18,9 +18,7 @@ class SWDEDataset(Dataset):
 
     def _get_split(self,files, split,seed=42):
         train, test = train_test_split(files,test_size=0.2,random_state=seed)
-        if split == "train":
-            return train
-        return test
+        return train if split == "train" else test
 
     def __len__(self):
         return len(self._idx2file)

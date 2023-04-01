@@ -22,7 +22,7 @@ for domain in DOMAINS:
     files = sorted((SWDE_PATH / domain).glob("**/*.htm"))[start_from:]
     pbar = tqdm.tqdm(files,total=len(files))
     errors = []
-    for path in pbar:    
+    for path in pbar:
         pbar.set_description(f"Processing {path.relative_to(SWDE_PATH / domain)}")
         with open(path,'r') as f:
             html = f.read()
@@ -31,11 +31,10 @@ for domain in DOMAINS:
             dir_name = PROC_PATH / domain / path.parent.name
             dir_name.mkdir(parents=True,exist_ok=True)
             with open(dir_name / path.with_suffix(".pkl").name,'wb') as f:
-                pickle.dump(features,f)          
+                pickle.dump(features,f)
         except Exception as e:
             print(e)
             errors.append(path)
-            pass
     print(f"Total errors: {len(errors)}")
 
 

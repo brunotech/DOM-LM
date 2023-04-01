@@ -131,57 +131,46 @@ class DataCollatorForDOMNodeMask(DataCollatorForWholeWordMask):
     """
 
     def torch_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
-        # Handle dict or lists with proper padding and conversion to tensor.
-        if isinstance(examples[0], Mapping):
-            input_ids = [e["input_ids"] for e in examples]
-            node_ids = [e["node_ids"] for e in examples]
-        else:
+        if not isinstance(examples[0], Mapping):
             raise ValueError(
                 "Examples required to have both input_ids and node_ids"                
             )
 
+        input_ids = [e["input_ids"] for e in examples]
+        node_ids = [e["node_ids"] for e in examples]
         batch_input = _torch_collate_batch(input_ids, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
-        mask_labels = []
-        for node_id in node_ids:            
-            mask_labels.append(self._whole_node_mask(node_id))
+        mask_labels = [self._whole_node_mask(node_id) for node_id in node_ids]
         batch_mask = _torch_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.torch_mask_tokens(batch_input, batch_mask)
         return {"input_ids": inputs, "labels": labels}
 
     def tf_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
-        # Handle dict or lists with proper padding and conversion to tensor.
-        if isinstance(examples[0], Mapping):
-            input_ids = [e["input_ids"] for e in examples]
-            node_ids = [e["node_ids"] for e in examples]
-        else:
+        if not isinstance(examples[0], Mapping):
             raise ValueError(
                 "Examples required to have both input_ids and node_ids"                
             )
 
+        input_ids = [e["input_ids"] for e in examples]
+        node_ids = [e["node_ids"] for e in examples]
         batch_input = _tf_collate_batch(input_ids, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
-        mask_labels = []
-        for node_id in node_ids:            
-            mask_labels.append(self._whole_node_mask(node_id))
+        mask_labels = [self._whole_node_mask(node_id) for node_id in node_ids]
         batch_mask = _tf_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.tf_mask_tokens(batch_input, batch_mask)
         return {"input_ids": inputs, "labels": labels}
 
     def numpy_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
-        if isinstance(examples[0], Mapping):
-            input_ids = [e["input_ids"] for e in examples]
-            node_ids = [e["node_ids"] for e in examples]
-        else:
+        if not isinstance(examples[0], Mapping):
             raise ValueError(
                 "Examples required to have both input_ids and node_ids"                
             )
 
+        input_ids = [e["input_ids"] for e in examples]
+        node_ids = [e["node_ids"] for e in examples]
         batch_input = _numpy_collate_batch(input_ids, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
-        mask_labels = []
-        for node_id in node_ids:            
-            mask_labels.append(self._whole_node_mask(node_id))
+        mask_labels = [self._whole_node_mask(node_id) for node_id in node_ids]
         batch_mask = _numpy_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.numpy_mask_tokens(batch_input, batch_mask)
         return {"input_ids": inputs, "labels": labels}
@@ -196,7 +185,7 @@ class DataCollatorForDOMNodeMask(DataCollatorForWholeWordMask):
         random.shuffle(unique_nodes)
 
         num_to_predict = min(max_predictions, max(1, int(round(len(input_nodes) * self.mlm_probability))))
-        masked_idxs = []        
+        masked_idxs = []
         for unique_node in unique_nodes:
             if len(masked_idxs) >= num_to_predict:
                 break
@@ -207,8 +196,7 @@ class DataCollatorForDOMNodeMask(DataCollatorForWholeWordMask):
             # predictions, then just skip this candidate.
             if len(masked_idxs) + len(indexes) > num_to_predict:
                 continue
-            
+
             masked_idxs.extend(indexes)
 
-        mask_labels = [1 if i in masked_idxs else 0 for i in range(len(input_nodes))]
-        return mask_labels
+        return [1 if i in masked_idxs else 0 for i in range(len(input_nodes))]

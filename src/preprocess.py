@@ -13,7 +13,7 @@ NODE_ATTRIBUTES = ("class", "id", "title", "aria-label")
 TAGS_PATH = Path(__file__).parents[1] / "data/tags.txt"
 with open(TAGS_PATH, "r") as f:
     TAGS_OF_INTEREST = [l.strip() for l in f.readlines()]
-TAG_TO_INT = dict((t, i) for i, t in enumerate(TAGS_OF_INTEREST))
+TAG_TO_INT = {t: i for i, t in enumerate(TAGS_OF_INTEREST)}
 
 
 tokens_cache = {}
@@ -26,23 +26,19 @@ def extract_element_info(
     all_text_content: bool = False,
     attrs_to_extract = NODE_ATTRIBUTES,
 ):
-    inner_text = ""    
+    inner_text = ""
     if type(element) == etree._ElementUnicodeResult:
         if element.is_text or element.is_tail:
-            inner_text = str(element)        
+            inner_text = str(element)
+    elif str(element.tag) == "img":
+        inner_text = element.attrib.get("alt", "")
     else:
-        if str(element.tag) == "img":
-            inner_text = element.attrib.get("alt", "")
-        else:
-            if all_text_content:
-                inner_text = element.text_content()
-            else:
-                inner_text = element.text if element.text else ""
-            inner_text += element.tail if element.tail else ""
+        inner_text = element.text_content() if all_text_content else element.text or ""
+        inner_text += element.tail or ""
 
     attrs = {
         k: v for k, v in element.attrib.items() if v and k in attrs_to_extract
-    }        
+    }
     return str(element.tag), inner_text.strip(), attrs
 
 def represent_node(element: etree._Element):
@@ -53,29 +49,26 @@ def represent_node(element: etree._Element):
 def postorder(root: etree._Element): 
     current_idx = 0
     stack = [] 
- 
-    while (root is not None or len(stack) != 0):
+
+    while root is not None or stack:
         if (root is not None):
             stack.append((root, current_idx))
             current_idx = 0
- 
-            if (len(root) >= 1):
-                root = list(root)[0]
-            else:
-                root = None
+
+            root = list(root)[0] if (len(root) >= 1) else None
             continue
 
         node,child_idx = stack.pop()
         yield node
- 
-        while (len(stack) != 0 and child_idx == len(stack[-1][0]) - 1):
+
+        while stack and child_idx == len(stack[-1][0]) - 1:
             node,child_idx = stack[-1]
             stack.pop()
             yield node                     
 
-        if (len(stack) != 0):
+        if stack:
             root = list(stack[-1][0])[child_idx + 1]
-            current_idx = child_idx + 1 
+            current_idx = child_idx + 1
     return
 
 def generate_subtrees(root,m,s):
@@ -102,25 +95,24 @@ def _get_subtrees(pre_order,post_order, m,s):
         new.append(el)  
         node_ids[el] = i
 
-    while len(new) != 0:
+    while new:
         visited = [n for n,idx in node_ids.items() if idx < node_ids[new[0]] ]
         total_len = _tokens_len(visited + new)
         ###prune postorder
         for el in post_order:
-            if el in new or total_len <= m:        
+            if el in new or total_len <= m:
                 break
-            else:
-                try:
-                    visited.remove(el)
-                    total_len -= _tokens_len([el])
-                except ValueError:
-                    pass
+            try:
+                visited.remove(el)
+                total_len -= _tokens_len([el])
+            except ValueError:
+                pass
         ### prune root
         el_last = None
         while total_len > m:
-            if len(visited) != 0:            
+            if visited:            
                 el_root = visited[0]                
-                num_child = sum(child in new or child in visited for child in el_root)        
+                num_child = sum(child in new or child in visited for child in el_root)
             else:
                 num_child = 2 # pop from new if there are no nodes in visited left
 
@@ -141,7 +133,7 @@ def _get_subtrees(pre_order,post_order, m,s):
             if _tokens_len(new) >= s:
                 break
             new.append(el)        
-            node_ids[el] = i    
+            node_ids[el] = i
     return subtrees
 
 
@@ -178,16 +170,15 @@ def get_features(element: etree._Element):
     tokenizer_res = tokenizer(element_repr,truncation=True)
     len_tokens = len(tokenizer_res["input_ids"])
 
-    result = {
-        "node_ids": [node_idx] * len_tokens, # p0
-        "parent_node_ids": [parent_node_idx] * len_tokens, # p1
-        "sibling_node_ids": [node_idx_siblings] * len_tokens, # p2
-        "depth_ids": [depth] * len_tokens, # p3
-        "tag_ids": [tag_id] * len_tokens, # p4
-        "position_ids": [token_idx + i for i in range(len_tokens)], # p5
-        **tokenizer_res
+    return {
+        "node_ids": [node_idx] * len_tokens,  # p0
+        "parent_node_ids": [parent_node_idx] * len_tokens,  # p1
+        "sibling_node_ids": [node_idx_siblings] * len_tokens,  # p2
+        "depth_ids": [depth] * len_tokens,  # p3
+        "tag_ids": [tag_id] * len_tokens,  # p4
+        "position_ids": [token_idx + i for i in range(len_tokens)],  # p5
+        **tokenizer_res,
     }
-    return result
 
 
 # Local Subtree features
@@ -209,7 +200,7 @@ def get_tree_features(t):
         el_parent = el.getparent()
         el_repr = represent_node(el)   
         reprs.append(el_repr)        
-        
+
         parent_node_idx = 0 
         node_idx = i
         if el_parent in elem_idxs:        
@@ -218,7 +209,7 @@ def get_tree_features(t):
 
         siblings = [child for child in el_parent if child in elem_idxs]
         node_idx_siblings = siblings.index(el)
-        
+
         depth = _get_depth(el,t[0])
         tag_id = TAG_TO_INT.get(str(el.tag),TAG_TO_INT["UNK"])
 
@@ -231,9 +222,9 @@ def get_tree_features(t):
             }
         )
     # do batch tokenization
-    tokenizer_res = tokenizer(reprs,return_tensors="pt",truncation=True,padding=True)     
-    for i, (el_result,input_ids,attn_mask) in enumerate(zip(el_results,tokenizer_res["input_ids"],tokenizer_res["attention_mask"])):
-        len_tokens = attn_mask.sum().item()                
+    tokenizer_res = tokenizer(reprs,return_tensors="pt",truncation=True,padding=True)
+    for el_result, input_ids, attn_mask in zip(el_results,tokenizer_res["input_ids"],tokenizer_res["attention_mask"]):
+        len_tokens = attn_mask.sum().item()
         input_ids = input_ids[:len_tokens].tolist()
         attn_mask = attn_mask[:len_tokens].tolist()
         for key in result:
